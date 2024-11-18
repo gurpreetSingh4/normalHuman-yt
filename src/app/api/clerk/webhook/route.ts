@@ -10,13 +10,11 @@ export const POST = async (req: Request) => {
 	const imageUrl = data.image_url
 	const id = data.id
 
-	await db.user.create({
-		id: id,
-		emailAddress: emailAddress,
-		firstName: firstName,
-		lastName: lastName,
-		imageUrl: imageUrl,
-	})
+	await db.user.upsert({
+        where: { id },
+        update: { emailAddress, firstName, lastName, imageUrl },
+        create: { id, emailAddress, firstName, lastName, imageUrl },
+    });
 
 	return new Response('Webhook received', {status:200})
 }
