@@ -12,7 +12,7 @@ const LinkAccountButton = () => {
 				window.location.href = authUrl
 			}
 		}>
-			Link Account
+			Link Account with Aurinko
 		</Button>
 	)
 }

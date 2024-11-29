@@ -29,6 +29,7 @@ model Account {
     nextDeltaToken String?
     threads        Thread[]
     emailAddresses EmailAddress[]
+    oramaIndex Json?
 }
 
 model Thread {
@@ -145,3 +146,4 @@ enum MeetingMessageMethod {
     counter
     other
 }
+

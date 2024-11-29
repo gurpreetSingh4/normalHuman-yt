@@ -2,56 +2,41 @@ import { db } from '~/server/db';
 import type { SyncUpdatedResponse, EmailMessage, EmailAddress, EmailAttachment, EmailHeader } from '../types';
 import pLimit from 'p-limit';
 import { Prisma } from '@prisma/client';
-// import { OramaManager } from './orama';
-// import { getEmbeddings } from './embeddings';
-// import { turndown } from './turndown';
+import { OramaClient } from './orama';
+import { fromJSON } from 'postcss';
+import { turndown } from './turndown';
+import { getEmbeddings } from './embedding';
 
 async function syncEmailsToDatabase(emails: EmailMessage[], accountId: string) {
     console.log(`Syncing ${emails.length} emails to database`);
-    const limit = pLimit(10); // Process up to 10 emails concurrently
-
-    // const oramaClient = new OramaManager(accountId)
-    // oramaClient.initialize()
-
+    const limit = pLimit(5);
+    const orama = new OramaClient(accountId)
+    await orama.initialize()
     try {
 
-        // async function syncToOrama() {
-        //     await Promise.all(emails.map(email => {
-        //         return limit(async () => {
-        //             const body = turndown.turndown(email.body ?? email.bodySnippet ?? '')
-        //             const payload = `From: ${email.from.name} <${email.from.address}>\nTo: ${email.to.map(t => `${t.name} <${t.address}>`).join(', ')}\nSubject: ${email.subject}\nBody: ${body}\n SentAt: ${new Date(email.sentAt).toLocaleString()}`
-        //             const bodyEmbedding = await getEmbeddings(payload);
-        //             await oramaClient.insert({
-        //                 title: email.subject,
-        //                 body: body,
-        //                 rawBody: email.bodySnippet ?? '',
-        //                 from: `${email.from.name} <${email.from.address}>`,
-        //                 to: email.to.map(t => `${t.name} <${t.address}>`),
-        //                 sentAt: new Date(email.sentAt).toLocaleString(),
-        //                 embeddings: bodyEmbedding,
-        //                 threadId: email.threadId
-        //             })
-        //         })
-        //     }))
-        // }
-
-        async function syncToDB() {
-            for (const [index, email] of emails.entries()) {
-                await upsertEmail(email, index, accountId);
-            }
-        }
-
-        await Promise.all([ syncToDB()])
-        // await Promise.all([syncToOrama(), syncToDB()])
-
-        // await oramaClient.saveIndex()
+        // Promise.all(emails.map((email, index) => upsertEmail(email, accountId, index)));
+       for(const email of emails) {
+        const body = turndown.turndown(email.body ?? email.bodySnippet ?? "")
+        const embeddings = await getEmbeddings(body)
+        await orama.insert({
+            subject: email.subject,
+            body: body,
+            from: email.from.address,
+            rawBody: email.bodySnippet ?? "",
+            to: email.to.map(to => to.address),
+            sentAt: email.sentAt.toLocaleString(),
+            threadid: email.threadId,
+            embeddings,
+        })
+        await upsertEmail(email, accountId, 0)
+       }
     } catch (error) {
         console.log('error', error)
     }
 
 }
 
-async function upsertEmail(email: EmailMessage, index: number, accountId: string) {
+async function upsertEmail(email: EmailMessage, accountId: string, index: number) {
     console.log(`Upserting email ${index + 1}`, JSON.stringify(email, null, 2));
     try {
 
@@ -236,9 +221,8 @@ async function upsertEmailAddress(address: EmailAddress, accountId: string) {
         });
 
         if (existingAddress) {
-            return await db.emailAddress.update({
+            return await db.emailAddress.findUnique({
                 where: { id: existingAddress.id },
-                data: { name: address.name, raw: address.raw },
             });
         } else {
             return await db.emailAddress.create({
